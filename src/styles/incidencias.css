@@ -1,0 +1,225 @@
+/* ============= INCIDENCIAS LAYOUT ============= */
+.incid-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .incid-grid { grid-template-columns: 1fr; }
+}
+
+/* ============= REPORTE ROWS ============= */
+.reporte-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ink-100);
+  transition: background 0.15s;
+}
+
+.reporte-row:hover { background: var(--mp-blue-50); }
+.reporte-row:last-child { border-bottom: none; }
+
+.reporte-id {
+  font-size: 11.5px;
+  color: var(--mp-blue-700);
+  font-weight: 500;
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.reporte-equipo {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink-900);
+  margin-bottom: 4px;
+}
+
+.reporte-meta {
+  display: flex;
+  gap: 14px;
+  font-size: 11px;
+  color: var(--ink-500);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.reporte-meta span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reporte-falla {
+  font-size: 12px;
+  color: var(--ink-700);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #fef2f2;
+  padding: 4px 8px;
+  border-radius: 4px;
+  width: fit-content;
+}
+
+.reporte-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.reporte-fotos {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--ink-600);
+  background: var(--ink-100);
+  padding: 3px 7px;
+  border-radius: 4px;
+}
+
+/* ============= PHOTO UPLOAD ============= */
+.photo-uploads {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.photo-slot {
+  aspect-ratio: 1;
+  border-radius: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.photo-slot.has-photo {
+  background: var(--ink-100);
+}
+
+.photo-slot.empty {
+  background: var(--ink-50);
+  border: 1.5px dashed var(--ink-300);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.photo-slot.empty:hover {
+  border-color: var(--mp-blue-500);
+  background: var(--mp-blue-50);
+}
+
+.photo-placeholder {
+  width: 100%;
+  height: 100%;
+  position: relative;
+}
+
+.photo-placeholder::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 30% 30%, rgba(255,255,255,0.4) 0%, transparent 50%),
+    radial-gradient(circle at 70% 70%, rgba(0,0,0,0.2) 0%, transparent 50%);
+}
+
+.photo-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  background: rgba(0,0,0,0.6);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ============= INCIDENT TIPO ============= */
+.incid-tipo-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: capitalize;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
+
+.incid-tipo-badge.tipo-falta     { background: var(--warn-soft); color: #92400e; }
+.incid-tipo-badge.tipo-retardo   { background: var(--info-soft); color: #155e75; }
+.incid-tipo-badge.tipo-accidente { background: var(--bad-soft); color: #991b1b; }
+.incid-tipo-badge.tipo-queja     { background: #fef3c7; color: #92400e; }
+.incid-tipo-badge.tipo-insumo    { background: var(--mp-blue-100); color: var(--mp-blue-800); }
+
+/* ============= HEATMAP ============= */
+.heatmap-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.heatmap-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.heatmap-label {
+  font-size: 11px;
+  color: var(--ink-600);
+  font-weight: 500;
+  text-align: right;
+}
+
+.heatmap-cells {
+  display: grid;
+  grid-template-columns: repeat(30, 1fr);
+  gap: 2px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: var(--ink-100);
+}
+
+.heatmap-cell.level-0 { background: var(--ink-100); }
+.heatmap-cell.level-1 { background: var(--mp-blue-200); }
+.heatmap-cell.level-2 { background: var(--mp-blue-400); }
+.heatmap-cell.level-3 { background: var(--mp-blue-600); }
+.heatmap-cell.level-4 { background: var(--mp-blue-800); }
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--ink-100);
+  font-size: 10px;
+  color: var(--ink-500);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  justify-content: flex-end;
+}
+.heatmap-legend .heatmap-cell {
+  width: 12px;
+  height: 12px;
+  aspect-ratio: auto;
+}
