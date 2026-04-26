@@ -20,6 +20,12 @@ export default function Personal() {
   const [empleados, setEmpleados] = useState(EMPLEADOS_DATA)
   const [draggedComodin, setDraggedComodin] = useState(null)
   const [dragOverFalta, setDragOverFalta] = useState(null)
+  const [nominaFocus, setNominaFocus] = useState(null)
+
+  const verNomina = (emp) => {
+    setNominaFocus(emp)
+    setView('nomina')
+  }
 
   const comodinesList = useMemo(() => getComodines(), [])
 
@@ -80,8 +86,8 @@ export default function Personal() {
             onAuto={handleAsignarAuto}
           />
         )}
-        {view === 'plantilla' && <PlantillaView empleados={empleados} setEmpleados={setEmpleados} />}
-        {view === 'nomina' && <NominaView empleados={empleados} />}
+        {view === 'plantilla' && <PlantillaView empleados={empleados} setEmpleados={setEmpleados} onVerNomina={verNomina} />}
+        {view === 'nomina' && <NominaView empleados={empleados} focus={nominaFocus} setFocus={setNominaFocus} />}
       </div>
     </div>
   )
@@ -241,7 +247,7 @@ function SuplenciasView({ faltas, comodines, zonas, draggedComodin, setDraggedCo
   )
 }
 
-function PlantillaView({ empleados, setEmpleados }) {
+function PlantillaView({ empleados, setEmpleados, onVerNomina }) {
   const toast = useToast()
   const [newOpen, setNewOpen] = useState(false)
   const [empleadoOpen, setEmpleadoOpen] = useState(null)
@@ -394,7 +400,7 @@ function PlantillaView({ empleados, setEmpleados }) {
                       trigger={<button className="btn-icon"><Icon name="more" size={14} /></button>}
                       items={[
                         { icon: 'user', label: 'Ver perfil', onClick: () => setEmpleadoOpen(e) },
-                        { icon: 'cash', label: 'Detalle de nómina', onClick: () => toast.info('Nómina', `${e.nombre} · $${e.sueldo.toLocaleString()} MXN base`) },
+                        { icon: 'cash', label: 'Detalle de nómina', onClick: () => onVerNomina(e) },
                         { icon: 'refresh', label: 'Sincronizar con NOI', onClick: () => toast.success('NOI', `${e.nombre} re-sincronizado`) },
                         { divider: true },
                         { icon: 'x', label: 'Dar de baja', danger: true, onClick: () => removeEmpleado(e.nombre) },
@@ -499,7 +505,84 @@ function NewEmpleadoModal({ open, onClose, onCreate }) {
   )
 }
 
-function NominaView({ empleados }) {
+// Tarifa ISR semanal · Art. 96 LISR (DOF 2024, vigente 2026)
+const ISR_TARIFA_SEMANAL = [
+  { lim: 171.78,    cf: 0,         tasa: 0.0192 },
+  { lim: 1458.03,   cf: 3.29,      tasa: 0.0640 },
+  { lim: 2562.35,   cf: 85.61,     tasa: 0.1088 },
+  { lim: 2978.64,   cf: 205.80,    tasa: 0.1600 },
+  { lim: 3566.18,   cf: 272.37,    tasa: 0.1792 },
+  { lim: 7192.64,   cf: 377.65,    tasa: 0.2136 },
+  { lim: 11336.57,  cf: 1152.20,   tasa: 0.2352 },
+  { lim: 21628.83,  cf: 2127.58,   tasa: 0.3000 },
+  { lim: 28838.45,  cf: 5215.27,   tasa: 0.3200 },
+  { lim: 86515.39,  cf: 7522.34,   tasa: 0.3400 },
+  { lim: Infinity,  cf: 27123.18,  tasa: 0.3500 },
+]
+
+// Subsidio para el empleo · semanal (aprox. tabla SAT)
+const subsidioSemanal = (gravado) => {
+  if (gravado <= 407.02)  return 93.66
+  if (gravado <= 610.53)  return 93.66
+  if (gravado <= 799.69)  return 93.66
+  if (gravado <= 814.66)  return 93.66
+  if (gravado <= 1023.75) return 90.44
+  if (gravado <= 1086.85) return 88.06
+  if (gravado <= 1228.50) return 81.55
+  if (gravado <= 1633.04) return 74.83
+  if (gravado <= 1771.74) return 67.83
+  if (gravado <= 2018.83) return 58.38
+  return 0
+}
+
+const calcISRSemanal = (gravado) => {
+  const t = ISR_TARIFA_SEMANAL.find(b => gravado <= b.lim)
+  if (!t) return 0
+  const li = ISR_TARIFA_SEMANAL[ISR_TARIFA_SEMANAL.indexOf(t) - 1]?.lim ?? 0.01
+  return t.cf + (gravado - li) * t.tasa
+}
+
+const UMA_DIARIA_2026 = 113.07 // proyección 2026 (UMA 2025: 113.07)
+
+const calcNominaSemanal = (sueldoMensual) => {
+  const sueldoDiario = sueldoMensual / 30
+  // Factor integración: aguinaldo 15 días / 365 + prima vacacional 25% × 6 días / 365 = 0.04521 → 1.0452
+  const factorIntegracion = 1.0452
+  const sdi = sueldoDiario * factorIntegracion
+  const diasSemana = 7
+
+  // Percepciones
+  const sueldoSemanal = sueldoDiario * diasSemana
+  const totalPercepciones = sueldoSemanal
+
+  // Cuotas IMSS empleado (semanal, sobre SDI tope 25 UMA)
+  const sdiTopado = Math.min(sdi, UMA_DIARIA_2026 * 25)
+  const baseSemanalSDI = sdiTopado * diasSemana
+  const excedente3UMA = Math.max(0, sdiTopado - UMA_DIARIA_2026 * 3) * diasSemana
+  const imssEspecieExc = excedente3UMA * 0.0040
+  const imssDinero     = baseSemanalSDI * 0.0025
+  const imssInvalidez  = baseSemanalSDI * 0.00625
+  const imssCesantia   = baseSemanalSDI * 0.01125
+  const imssTotal = imssEspecieExc + imssDinero + imssInvalidez + imssCesantia
+
+  // ISR semanal sobre sueldo gravado
+  const isr = calcISRSemanal(sueldoSemanal)
+  const subsidio = subsidioSemanal(sueldoSemanal)
+  const isrNeto = Math.max(0, isr - subsidio)
+  const subsidioPagar = Math.max(0, subsidio - isr)
+
+  const totalDeducciones = imssTotal + isrNeto
+  const neto = totalPercepciones - totalDeducciones + subsidioPagar
+
+  return {
+    sueldoDiario, sdi, sueldoSemanal, totalPercepciones,
+    imssEspecieExc, imssDinero, imssInvalidez, imssCesantia, imssTotal,
+    isr, subsidio, isrNeto, subsidioPagar,
+    totalDeducciones, neto,
+  }
+}
+
+function NominaView({ empleados, focus, setFocus }) {
   const toast = useToast()
   const [syncing, setSyncing] = useState(false)
   const [sending, setSending] = useState(false)
@@ -584,11 +667,13 @@ function NominaView({ empleados }) {
         </div>
       </div>
 
+      {focus && <DetalleNominaSemanal empleado={focus} onClose={() => setFocus(null)} getClienteNombre={getClienteNombre} />}
+
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-eyebrow">Integración Aspel NOI</div>
-            <h3 className="card-title">Pre-nómina del periodo · {filtered.length} empleados</h3>
+            <div className="card-eyebrow">Histórico de pagos</div>
+            <h3 className="card-title">Pagos semanales por empleado · {filtered.length}</h3>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <select
@@ -616,42 +701,17 @@ function NominaView({ empleados }) {
             </button>
           </div>
         </div>
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Empleado</th>
-              <th>Cliente</th>
-              <th>Sueldo base</th>
-              <th>Faltas</th>
-              <th>Bonos</th>
-              <th>Deducciones</th>
-              <th>Neto</th>
-              <th>Estado</th>
-            </tr>
-          </thead>
-          <tbody>
-            {paged.map(e => {
-              const h = hash(e.nombre)
-              const faltas = (h % 37 === 0) ? 1 : 0
-              const bonos = (h % 17 === 0) ? 800 : 0
-              const ded = Math.round(e.sueldo * 0.12)
-              const desc = Math.round((e.sueldo / 30) * faltas)
-              const neto = e.sueldo - ded - desc + bonos
-              return (
-                <tr key={e.nombre}>
-                  <td style={{ fontWeight: 500 }}>{e.nombre}</td>
-                  <td style={{ fontSize: 12 }}>{getClienteNombre(e.cliente)}</td>
-                  <td className="mono">${e.sueldo.toLocaleString()}</td>
-                  <td className="mono">{faltas > 0 ? <span style={{color: 'var(--bad)'}}>−${desc.toFixed(0)}</span> : '—'}</td>
-                  <td className="mono">{bonos > 0 ? <span style={{color: 'var(--ok)'}}>+${bonos}</span> : '—'}</td>
-                  <td className="mono">−${ded.toFixed(0)}</td>
-                  <td className="mono" style={{ fontWeight: 600 }}>${neto.toLocaleString()}</td>
-                  <td><span className="tag ok">Listo</span></td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+        <div>
+          {paged.map(e => (
+            <EmpleadoHistorialRow
+              key={e.nombre}
+              empleado={e}
+              getClienteNombre={getClienteNombre}
+              onClick={() => { setFocus(e); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+              hash={hash}
+            />
+          ))}
+        </div>
         {totalPages > 1 && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', borderTop: '1px solid var(--ink-100)' }}>
             <div className="mono" style={{ fontSize: 11, color: 'var(--ink-500)' }}>
@@ -689,6 +749,289 @@ function NominaView({ empleados }) {
           <Icon name="alert" size={12} /> Este proceso no se puede deshacer una vez que NOI confirma recepción.
         </div>
       </Modal>
+    </div>
+  )
+}
+
+function generarHistorialPagos(empleado, baseNeto, count, hashFn) {
+  const h = hashFn(empleado.nombre)
+  const today = new Date()
+  // Domingo de la semana pasada como último periodo cerrado
+  const dow = today.getDay() // 0 dom – 6 sáb
+  const lastSunday = new Date(today)
+  lastSunday.setDate(today.getDate() - (dow === 0 ? 7 : dow))
+  const history = []
+  for (let i = 0; i < count; i++) {
+    const sunday = new Date(lastSunday)
+    sunday.setDate(lastSunday.getDate() - i * 7)
+    const monday = new Date(sunday)
+    monday.setDate(sunday.getDate() - 6)
+    const swing = (((h >> i) & 0xff) / 255) * 0.10 - 0.05  // ±5%
+    const faltaProb = ((h >> (i + 3)) % 23 === 0)
+    const bonoProb  = ((h >> (i + 5)) % 11 === 0)
+    const faltaDesc = faltaProb ? Math.round(empleado.sueldo / 30) : 0
+    const bono = bonoProb ? 800 : 0
+    const neto = Math.round(baseNeto * (1 + swing) - faltaDesc + bono)
+    history.push({ monday, sunday, neto, falta: faltaProb, bono: bonoProb })
+  }
+  return history.reverse()
+}
+
+function EmpleadoHistorialRow({ empleado, getClienteNombre, onClick, hash }) {
+  const baseNomina = useMemo(() => calcNominaSemanal(empleado.sueldo), [empleado.sueldo])
+  const historia = useMemo(() => generarHistorialPagos(empleado, baseNomina.neto, 8, hash), [empleado, baseNomina.neto, hash])
+  const ultimo = historia[historia.length - 1]
+  const max = Math.max(...historia.map(h => h.neto))
+  const min = Math.min(...historia.map(h => h.neto))
+  const range = Math.max(1, max - min)
+  const initials = empleado.nombre.split(' ').slice(0, 2).map(w => w[0]).join('')
+  const fmtMonto = (v) => v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v}`
+  const fmtFecha = (d) => d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+
+  return (
+    <div className="empleado-historial-row" onClick={onClick}>
+      <div className="empleado-historial-id">
+        <div className="empleado-historial-avatar">{initials}</div>
+        <div>
+          <div className="empleado-historial-nombre">{empleado.nombre}</div>
+          <div className="empleado-historial-sub mono">{getClienteNombre(empleado.cliente)} · {empleado.puesto}</div>
+        </div>
+      </div>
+
+      <div className="historial-bars" title={`Últimas ${historia.length} semanas`}>
+        {historia.map((p, i) => {
+          const heightPct = 25 + ((p.neto - min) / range) * 75
+          const isLatest = i === historia.length - 1
+          return (
+            <div key={i} className="historial-bar-wrap">
+              <div
+                className={`historial-bar ${p.falta ? 'has-falta' : ''} ${p.bono ? 'has-bono' : ''} ${isLatest ? 'latest' : ''}`}
+                style={{ height: `${heightPct}%` }}
+                title={`${fmtFecha(p.monday)}–${fmtFecha(p.sunday)} · $${p.neto.toLocaleString()}${p.falta ? ' · falta' : ''}${p.bono ? ' · bono' : ''}`}
+              ></div>
+              <div className="historial-bar-fecha mono">{fmtFecha(p.sunday)}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="empleado-historial-ultimo">
+        <div className="card-eyebrow" style={{ fontSize: 9.5 }}>Último pago</div>
+        <div className="mono" style={{ fontSize: 16, fontWeight: 600 }}>${ultimo.neto.toLocaleString()}</div>
+        <div className="mono" style={{ fontSize: 10, color: 'var(--ink-500)' }}>
+          {fmtFecha(ultimo.sunday)}
+          {ultimo.falta && <span className="tag bad" style={{ marginLeft: 6, padding: '0 5px', fontSize: 9 }}>falta</span>}
+          {ultimo.bono && <span className="tag ok" style={{ marginLeft: 6, padding: '0 5px', fontSize: 9 }}>bono</span>}
+        </div>
+      </div>
+
+      <button
+        className="btn btn-ghost"
+        onClick={(ev) => { ev.stopPropagation(); onClick() }}
+        style={{ flexShrink: 0 }}
+      >
+        <Icon name="cash" size={14} /> Ver detalle
+      </button>
+    </div>
+  )
+}
+
+function generarHistorialDetallado(empleado, count, hashFn) {
+  const h = hashFn(empleado.nombre)
+  const today = new Date()
+  const dow = today.getDay()
+  const lastSunday = new Date(today)
+  lastSunday.setDate(today.getDate() - (dow === 0 ? 7 : dow))
+  const base = calcNominaSemanal(empleado.sueldo)
+  const out = []
+  for (let i = 0; i < count; i++) {
+    const sunday = new Date(lastSunday)
+    sunday.setDate(lastSunday.getDate() - i * 7)
+    const monday = new Date(sunday)
+    monday.setDate(sunday.getDate() - 6)
+    const falta = ((h >> (i + 3)) % 23 === 0)
+    const bono  = ((h >> (i + 5)) % 11 === 0) ? 800 : 0
+    const faltaDesc = falta ? Math.round(empleado.sueldo / 30) : 0
+    const neto = base.neto - faltaDesc + bono
+    out.push({
+      monday, sunday,
+      bruto: base.sueldoSemanal,
+      isr: base.isrNeto,
+      imss: base.imssTotal,
+      bono, falta, faltaDesc,
+      neto,
+    })
+  }
+  return out
+}
+
+function DetalleNominaSemanal({ empleado, onClose, getClienteNombre }) {
+  const [tab, setTab] = useState('actual')
+  const n = useMemo(() => calcNominaSemanal(empleado.sueldo), [empleado.sueldo])
+  const hashFn = (str) => { let x = 0; for (let i = 0; i < str.length; i++) x = (x * 31 + str.charCodeAt(i)) >>> 0; return x }
+  const historico = useMemo(() => generarHistorialDetallado(empleado, 12, hashFn), [empleado])
+  const fmt = (v) => `$${v.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const today = new Date()
+  const monday = new Date(today); monday.setDate(today.getDate() - ((today.getDay() + 6) % 7))
+  const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6)
+  const fmtDate = (d) => d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })
+
+  const acumNeto = historico.reduce((s, w) => s + w.neto, 0)
+  const acumBruto = historico.reduce((s, w) => s + w.bruto, 0)
+  const acumDed = historico.reduce((s, w) => s + w.isr + w.imss + w.faltaDesc, 0)
+  const acumBono = historico.reduce((s, w) => s + w.bono, 0)
+
+  return (
+    <div className="card nomina-detalle" style={{ borderColor: 'var(--mp-blue-500)', boxShadow: '0 0 0 4px var(--mp-blue-100), var(--shadow-sm)' }}>
+      <div className="card-header">
+        <div>
+          <div className="card-eyebrow">Recibo de nómina semanal · LFT / LISR / LSS</div>
+          <h3 className="card-title">{empleado.nombre} · {fmtDate(monday)} – {fmtDate(sunday)}</h3>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="tag mono blue">CFDI 4.0 · Pago semanal</span>
+          <button className="btn btn-ghost" onClick={onClose}>
+            <Icon name="x" size={14} /> Cerrar
+          </button>
+        </div>
+      </div>
+
+      <div className="nomina-tabs">
+        <button className={`nomina-tab ${tab === 'actual' ? 'active' : ''}`} onClick={() => setTab('actual')}>
+          <Icon name="cash" size={13} /> Semana actual
+        </button>
+        <button className={`nomina-tab ${tab === 'historico' ? 'active' : ''}`} onClick={() => setTab('historico')}>
+          <Icon name="clock" size={13} /> Histórico · {historico.length} semanas
+        </button>
+      </div>
+
+      {tab === 'actual' && (
+        <>
+          <div style={{ padding: 18, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, borderBottom: '1px solid var(--ink-100)' }}>
+            <InfoCell label="Puesto" value={empleado.puesto} />
+            <InfoCell label="Cliente" value={getClienteNombre(empleado.cliente)} />
+            <InfoCell label="Antigüedad" value={empleado.antiguedad} />
+            <InfoCell label="Sueldo mensual" value={fmt(empleado.sueldo)} mono />
+            <InfoCell label="Sueldo diario" value={fmt(n.sueldoDiario)} mono />
+            <InfoCell label="SDI (factor 1.0452)" value={fmt(n.sdi)} mono />
+            <InfoCell label="Días laborados" value="7 / 7" mono />
+            <InfoCell label="UMA 2026" value={`$${UMA_DIARIA_2026.toFixed(2)}`} mono />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', borderBottom: '1px solid var(--ink-100)' }}>
+            <div style={{ padding: 18, borderRight: '1px solid var(--ink-100)' }}>
+              <div className="card-eyebrow" style={{ marginBottom: 10, color: 'var(--ok)' }}>Percepciones</div>
+              <NominaRow label="Sueldo semanal (7 días)" amount={n.sueldoSemanal} />
+              {n.subsidioPagar > 0 && <NominaRow label="Subsidio para el empleo" amount={n.subsidioPagar} note="A favor del trabajador" />}
+              <NominaRow label="Total percepciones" amount={n.totalPercepciones + n.subsidioPagar} bold />
+            </div>
+            <div style={{ padding: 18 }}>
+              <div className="card-eyebrow" style={{ marginBottom: 10, color: 'var(--bad)' }}>Deducciones</div>
+              <NominaRow label="ISR Art. 96 LISR" amount={-n.isrNeto} note={n.subsidio > 0 && n.isrNeto === 0 ? 'Cubierto por subsidio' : null} />
+              <NominaRow label="IMSS · prest. dinero (0.25%)" amount={-n.imssDinero} small />
+              <NominaRow label="IMSS · invalidez y vida (0.625%)" amount={-n.imssInvalidez} small />
+              <NominaRow label="IMSS · cesantía y vejez (1.125%)" amount={-n.imssCesantia} small />
+              {n.imssEspecieExc > 0 && <NominaRow label="IMSS · excedente 3 UMA (0.40%)" amount={-n.imssEspecieExc} small />}
+              <NominaRow label="Total deducciones" amount={-n.totalDeducciones} bold />
+            </div>
+          </div>
+
+          <div style={{ padding: 18, display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--mp-blue-50)' }}>
+            <div>
+              <div className="card-eyebrow">Neto a pagar · Semanal</div>
+              <div style={{ fontSize: 11, color: 'var(--ink-500)', marginTop: 2 }}>
+                Fundamento: Art. 25, 27, 96 LISR · Art. 25, 106, 107 LSS · Decreto Subsidio al Empleo (DOF 2024)
+              </div>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--mp-blue-800)' }} className="mono">
+              {fmt(n.neto)}
+            </div>
+          </div>
+        </>
+      )}
+
+      {tab === 'historico' && (
+        <>
+          <table className="table nomina-historico">
+            <thead>
+              <tr>
+                <th>Periodo</th>
+                <th style={{ textAlign: 'right' }}>Bruto</th>
+                <th style={{ textAlign: 'right' }}>ISR</th>
+                <th style={{ textAlign: 'right' }}>IMSS</th>
+                <th style={{ textAlign: 'right' }}>Faltas</th>
+                <th style={{ textAlign: 'right' }}>Bonos</th>
+                <th style={{ textAlign: 'right' }}>Neto</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {historico.map((w, i) => (
+                <tr key={i}>
+                  <td className="mono" style={{ fontSize: 12 }}>{fmtDate(w.monday)} – {fmtDate(w.sunday)}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>{fmt(w.bruto)}</td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--bad)' }}>−{fmt(w.isr)}</td>
+                  <td className="mono" style={{ textAlign: 'right', color: 'var(--bad)' }}>−{fmt(w.imss)}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>{w.falta ? <span style={{ color: 'var(--bad)' }}>−{fmt(w.faltaDesc)}</span> : '—'}</td>
+                  <td className="mono" style={{ textAlign: 'right' }}>{w.bono ? <span style={{ color: 'var(--ok)' }}>+{fmt(w.bono)}</span> : '—'}</td>
+                  <td className="mono" style={{ textAlign: 'right', fontWeight: 600 }}>{fmt(w.neto)}</td>
+                  <td><span className="tag ok">Pagado</span></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: 'var(--mp-blue-50)', fontWeight: 600 }}>
+                <td className="mono" style={{ fontSize: 12 }}>Acumulado · {historico.length} semanas</td>
+                <td className="mono" style={{ textAlign: 'right' }}>{fmt(acumBruto)}</td>
+                <td className="mono" style={{ textAlign: 'right', color: 'var(--bad)' }}>−{fmt(acumDed - historico.reduce((s, w) => s + w.faltaDesc, 0))}</td>
+                <td className="mono" style={{ textAlign: 'right' }}>—</td>
+                <td className="mono" style={{ textAlign: 'right' }}>—</td>
+                <td className="mono" style={{ textAlign: 'right', color: 'var(--ok)' }}>+{fmt(acumBono)}</td>
+                <td className="mono" style={{ textAlign: 'right', color: 'var(--mp-blue-800)' }}>{fmt(acumNeto)}</td>
+                <td></td>
+              </tr>
+            </tfoot>
+          </table>
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--ink-100)', fontSize: 11, color: 'var(--ink-500)' }}>
+            Histórico calculado con la misma fórmula del recibo actual · variaciones por faltas y bonos detectados en pre-nómina
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function InfoCell({ label, value, mono }) {
+  return (
+    <div>
+      <div className="card-eyebrow" style={{ fontSize: 9.5 }}>{label}</div>
+      <div className={mono ? 'mono' : ''} style={{ fontSize: 13, fontWeight: 500, marginTop: 3 }}>{value}</div>
+    </div>
+  )
+}
+
+function NominaRow({ label, amount, bold, small, note }) {
+  const positive = amount >= 0
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      padding: '6px 0',
+      borderTop: bold ? '1px solid var(--ink-200)' : 'none',
+      marginTop: bold ? 6 : 0,
+    }}>
+      <div>
+        <div style={{ fontSize: small ? 12 : 13, fontWeight: bold ? 600 : 400, color: 'var(--ink-800)' }}>{label}</div>
+        {note && <div style={{ fontSize: 10.5, color: 'var(--ink-500)', marginTop: 1 }}>{note}</div>}
+      </div>
+      <div className="mono" style={{
+        fontSize: bold ? 14 : 12.5,
+        fontWeight: bold ? 700 : 500,
+        color: positive ? 'var(--ink-900)' : 'var(--bad)',
+      }}>
+        {positive ? '' : '−'}${Math.abs(amount).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </div>
     </div>
   )
 }

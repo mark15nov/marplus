@@ -3,11 +3,37 @@ import { Icon } from '../components/Icons'
 import { Modal, useToast } from '../components/ui.jsx'
 import '../styles/incidencias.css'
 
+const ESTADO_FLOW = ['pendiente', 'recogido', 'en-reparacion', 'reparado', 'entregado']
+const ESTADO_LABEL = {
+  'pendiente':     'Por recoger',
+  'recogido':      'Recogido',
+  'en-reparacion': 'En reparación',
+  'reparado':      'Reparado',
+  'entregado':     'Entregado',
+}
+const ESTADO_TAG = {
+  'pendiente':     'warn',
+  'recogido':      'info',
+  'en-reparacion': 'blue',
+  'reparado':      'ok',
+  'entregado':     'ok',
+}
+const ESTADO_ACTION = {
+  'pendiente':     { label: 'Recoger',           icon: 'package' },
+  'recogido':      { label: 'Iniciar reparación', icon: 'settings' },
+  'en-reparacion': { label: 'Marcar reparado',    icon: 'check' },
+  'reparado':      { label: 'Entregar',           icon: 'arrow_right' },
+}
+const nextEstado = (e) => {
+  const i = ESTADO_FLOW.indexOf(e)
+  return i >= 0 && i < ESTADO_FLOW.length - 1 ? ESTADO_FLOW[i + 1] : null
+}
+
 const REPORTES_INIT = [
-  { id: 'EQ-1184', supervisor: 'Esmeralda Rodríguez', cliente: 'Hospital Ángeles', equipo: 'Aspiradora Karcher T 12/1', falla: 'No enciende', fecha: 'Hoy · 11:42', estado: 'pendiente', fotos: 3 },
-  { id: 'EQ-1183', supervisor: 'Carlos Pérez',         cliente: 'Torre BBVA',      equipo: 'Pulidora Tornado BR-1700',   falla: 'Cable dañado', fecha: 'Hoy · 09:15', estado: 'en-revision', fotos: 2 },
-  { id: 'EQ-1182', supervisor: 'María Solís',          cliente: 'Plaza Antara',    equipo: 'Hidrolavadora K5',            falla: 'Pierde presión', fecha: 'Ayer · 17:33', estado: 'reparado', fotos: 4 },
-  { id: 'EQ-1181', supervisor: 'Rubén Estrada',        cliente: 'Citibanamex',     equipo: 'Carrito multifuncional',      falla: 'Llanta rota', fecha: 'Ayer · 14:08', estado: 'reparado', fotos: 1 },
+  { id: 'EQ-1184', supervisor: 'Esmeralda Rodríguez', cliente: 'Hospital Ángeles', equipo: 'Aspiradora Karcher T 12/1', falla: 'No enciende',    fecha: 'Hoy · 11:42',  estado: 'pendiente',     fotos: 3 },
+  { id: 'EQ-1183', supervisor: 'Carlos Pérez',         cliente: 'Torre BBVA',      equipo: 'Pulidora Tornado BR-1700',  falla: 'Cable dañado',   fecha: 'Hoy · 09:15',  estado: 'recogido',      fotos: 2 },
+  { id: 'EQ-1182', supervisor: 'María Solís',          cliente: 'Plaza Antara',    equipo: 'Hidrolavadora K5',           falla: 'Pierde presión', fecha: 'Ayer · 17:33', estado: 'en-reparacion', fotos: 4 },
+  { id: 'EQ-1181', supervisor: 'Rubén Estrada',        cliente: 'Citibanamex',     equipo: 'Carrito multifuncional',     falla: 'Llanta rota',    fecha: 'Ayer · 14:08', estado: 'reparado',      fotos: 1 },
 ]
 
 const INCIDENTES_INIT = [
@@ -133,7 +159,7 @@ function EquiposTab({ reportes, setReportes }) {
 
   const updateEstado = (id, nuevo) => {
     setReportes(prev => prev.map(r => r.id === id ? { ...r, estado: nuevo } : r))
-    toast.success('Estado actualizado', `${id} → ${nuevo.replace('-', ' ')}`)
+    toast.success('Estado actualizado', `${id} → ${ESTADO_LABEL[nuevo] || nuevo}`)
   }
 
   return (
@@ -172,44 +198,70 @@ function EquiposTab({ reportes, setReportes }) {
                 onChange={e => setFilter(e.target.value)}
               >
                 <option value="todos">Todos</option>
-                <option value="pendiente">Pendientes</option>
-                <option value="en-revision">En revisión</option>
-                <option value="reparado">Reparados</option>
+                {ESTADO_FLOW.map(e => (
+                  <option key={e} value={e}>{ESTADO_LABEL[e]}</option>
+                ))}
               </select>
             </div>
           </div>
           <div>
             {filteredReportes.length === 0 ? (
               <div className="empty-state">Sin reportes en este estado</div>
-            ) : filteredReportes.map(r => (
-              <div
-                key={r.id}
-                className="reporte-row"
-                style={{ cursor: 'pointer' }}
-                onClick={() => setDetail(r)}
-              >
-                <div className="reporte-id mono">{r.id}</div>
-                <div style={{ flex: 1 }}>
-                  <div className="reporte-equipo">{r.equipo}</div>
-                  <div className="reporte-meta mono">
-                    <span><Icon name="user" size={11} /> {r.supervisor}</span>
-                    <span><Icon name="pin" size={11} /> {r.cliente}</span>
-                    <span><Icon name="clock" size={11} /> {r.fecha}</span>
+            ) : filteredReportes.map(r => {
+              const next = nextEstado(r.estado)
+              const action = ESTADO_ACTION[r.estado]
+              const stepIdx = ESTADO_FLOW.indexOf(r.estado)
+              return (
+                <div
+                  key={r.id}
+                  className="reporte-row"
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => setDetail(r)}
+                >
+                  <div className="reporte-id mono">{r.id}</div>
+                  <div style={{ flex: 1 }}>
+                    <div className="reporte-equipo">{r.equipo}</div>
+                    <div className="reporte-meta mono">
+                      <span><Icon name="user" size={11} /> {r.supervisor}</span>
+                      <span><Icon name="pin" size={11} /> {r.cliente}</span>
+                      <span><Icon name="clock" size={11} /> {r.fecha}</span>
+                    </div>
+                    <div className="reporte-falla">
+                      <Icon name="alert" size={11} color="var(--bad)" /> {r.falla}
+                    </div>
+                    <div className="reporte-steps">
+                      {ESTADO_FLOW.map((e, i) => (
+                        <div
+                          key={e}
+                          className={`reporte-step ${i < stepIdx ? 'done' : i === stepIdx ? 'current' : ''}`}
+                          title={ESTADO_LABEL[e]}
+                        >
+                          <span className="reporte-step-dot">{i < stepIdx ? '✓' : i + 1}</span>
+                          <span className="reporte-step-label">{ESTADO_LABEL[e]}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div className="reporte-falla">
-                    <Icon name="alert" size={11} color="var(--bad)" /> {r.falla}
+                  <div className="reporte-side">
+                    <div className="reporte-fotos">
+                      <Icon name="camera" size={12} /> <span className="mono">{r.fotos}</span>
+                    </div>
+                    <span className={`tag ${ESTADO_TAG[r.estado]}`}>
+                      {ESTADO_LABEL[r.estado]}
+                    </span>
+                    {next && action && (
+                      <button
+                        className="btn btn-primary"
+                        style={{ height: 30, padding: '0 12px', fontSize: 12, marginTop: 4 }}
+                        onClick={(ev) => { ev.stopPropagation(); updateEstado(r.id, next) }}
+                      >
+                        <Icon name={action.icon} size={12} /> {action.label}
+                      </button>
+                    )}
                   </div>
                 </div>
-                <div className="reporte-side">
-                  <div className="reporte-fotos">
-                    <Icon name="camera" size={12} /> <span className="mono">{r.fotos}</span>
-                  </div>
-                  <span className={`tag ${r.estado === 'reparado' ? 'ok' : r.estado === 'en-revision' ? 'info' : 'warn'}`}>
-                    {r.estado.replace('-', ' ')}
-                  </span>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 
@@ -277,7 +329,7 @@ function EquiposTab({ reportes, setReportes }) {
               />
             </div>
             <div className="form-row">
-              <label>Evidencia fotográfica · {form.fotos.length}/5</label>
+              <label>Subir evidencia · {form.fotos.length}/5</label>
               <div className="photo-uploads">
                 {form.fotos.map((grad, i) => (
                   <div key={i} className="photo-slot has-photo">
@@ -290,7 +342,7 @@ function EquiposTab({ reportes, setReportes }) {
                 {form.fotos.length < 5 && (
                   <button className="photo-slot empty" onClick={addPhoto}>
                     <Icon name="camera" size={20} color="var(--ink-400)" />
-                    <span style={{ fontSize: 10, color: 'var(--ink-500)', marginTop: 4 }}>Tomar foto</span>
+                    <span style={{ fontSize: 10, color: 'var(--ink-500)', marginTop: 4 }}>Subir foto</span>
                   </button>
                 )}
               </div>
@@ -321,9 +373,9 @@ function EquiposTab({ reportes, setReportes }) {
         footer={detail && (
           <>
             <button className="btn btn-ghost" onClick={() => setDetail(null)}>Cerrar</button>
-            {detail.estado !== 'reparado' && (
-              <button className="btn btn-primary" onClick={() => { updateEstado(detail.id, detail.estado === 'pendiente' ? 'en-revision' : 'reparado'); setDetail(null) }}>
-                <Icon name="check" size={14} /> {detail.estado === 'pendiente' ? 'Iniciar revisión' : 'Marcar reparado'}
+            {nextEstado(detail.estado) && (
+              <button className="btn btn-primary" onClick={() => { updateEstado(detail.id, nextEstado(detail.estado)); setDetail(null) }}>
+                <Icon name={ESTADO_ACTION[detail.estado].icon} size={14} /> {ESTADO_ACTION[detail.estado].label}
               </button>
             )}
           </>
@@ -335,7 +387,7 @@ function EquiposTab({ reportes, setReportes }) {
               <InfoBox label="Supervisor" value={detail.supervisor} />
               <InfoBox label="Cliente" value={detail.cliente} />
               <InfoBox label="Reportado" value={detail.fecha} />
-              <InfoBox label="Estado" value={<span className={`tag ${detail.estado === 'reparado' ? 'ok' : detail.estado === 'en-revision' ? 'info' : 'warn'}`}>{detail.estado.replace('-', ' ')}</span>} />
+              <InfoBox label="Estado" value={<span className={`tag ${ESTADO_TAG[detail.estado]}`}>{ESTADO_LABEL[detail.estado]}</span>} />
             </div>
             <div>
               <div className="card-eyebrow" style={{ marginBottom: 6 }}>Falla reportada</div>

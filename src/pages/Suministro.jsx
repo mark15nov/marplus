@@ -18,9 +18,13 @@ const CLIENTES_CATALOG = [
 ]
 
 const ALERTAS_INIT = [
-  { cliente: 'WeWork Insurgentes', uso: 102, presupuesto: 14000, severity: 'critico' },
-  { cliente: 'Hospital Ángeles',   uso: 92,  presupuesto: 28000, severity: 'alto'    },
-  { cliente: 'Torre BBVA',         uso: 67,  presupuesto: 18000, severity: 'medio'   },
+  { tipo: 'presupuesto', cliente: 'WeWork Insurgentes',       uso: 102, presupuesto: 14000, severity: 'critico' },
+  { tipo: 'presupuesto', cliente: 'Plaza Antara',             uso: 108, presupuesto: 22000, severity: 'critico' },
+  { tipo: 'presupuesto', cliente: 'Hospital Ángeles',         uso: 92,  presupuesto: 28000, severity: 'alto'    },
+  { tipo: 'presupuesto', cliente: 'Corporativo Citibanamex',  uso: 96,  presupuesto: 19500, severity: 'alto'    },
+  { tipo: 'presupuesto', cliente: 'Torre BBVA',               uso: 67,  presupuesto: 18000, severity: 'medio'   },
+  { tipo: 'stock', cliente: 'Hospital Ángeles Pedregal', producto: 'Cloro concentrado 5%', disponible: 0,  requerido: 20, unidad: 'L',  severity: 'critico' },
+  { tipo: 'stock', cliente: 'Universidad Anáhuac Norte', producto: 'Guantes nitrilo L',    disponible: 1,  requerido: 8,  unidad: 'cajas', severity: 'alto'  },
 ]
 
 const DEFAULT_ITEMS = {
@@ -171,22 +175,96 @@ export default function Suministro() {
         </div>
 
         <div className="flow-canvas">
-          <FlowNode num="01" title="Compras" sub="Origen" status="active" count={solicitudes.length} icon="package" onClick={() => toast.info('Etapa 01', 'Origen de la solicitud')} />
-          <FlowConnector active />
-          <FlowNode num="02" title="Servicio" sub="Genera formato" status="active" count={solicitudes.length} icon="user" onClick={() => toast.info('Etapa 02', 'Servicio genera formato')} />
+          <FlowNode num="01" title="Solicitud y formato" sub="Compras · Servicio" status="active" count={solicitudes.length} icon="user" onClick={() => toast.info('Etapa 01', 'Solicitud y generación de formato')} />
           <FlowConnector active />
           <FlowSplit>
-            <FlowNode num="03a" title="Corporativo" sub="Aprobación + alertas" status="active" count={solicitudes.filter(s => s.estado === 'pre-revision' || s.estado === 'pendiente').length} icon="building" alert onClick={() => toast.warn('Corporativo', 'Revisión de aprobación pendiente')} />
-            <FlowNode num="03b" title="Almacén" sub="Pre-solicitud" status="waiting" count={solicitudes.filter(s => s.estado === 'pre-revision').length} icon="package" onClick={() => toast.info('Almacén', 'Pre-solicitudes en espera')} />
+            <FlowNode num="02a" title="Corporativo" sub="Aprobación + alertas" status="active" count={solicitudes.filter(s => s.estado === 'pre-revision' || s.estado === 'pendiente').length} icon="building" alert alertCount={alertas.filter(a => a.severity === 'critico' || a.severity === 'alto').length} onClick={() => toast.warn('Corporativo', `${alertas.filter(a => a.severity === 'critico' || a.severity === 'alto').length} alertas activas · presupuesto y stock`)} />
+            <FlowNode num="02b" title="Almacén" sub="Pre-solicitud" status="waiting" count={solicitudes.filter(s => s.estado === 'pre-revision').length} icon="package" alert alertCount={alertas.filter(a => a.tipo === 'stock').length} onClick={() => toast.warn('Almacén', `${alertas.filter(a => a.tipo === 'stock').length} alertas de stock · revisar reposición`)} />
           </FlowSplit>
-          <FlowConnector active label="VALIDA" />
-          <FlowNode num="04" title="SAE" sub="DB productos + presupuesto" status="active" count="∞" icon="link" external onClick={() => toast.success('SAE', 'Integración activa')} />
           <FlowConnector active label="LIBERA" />
-          <FlowNode num="05" title="Almacén" sub="Surtir" status="active" count={solicitudes.filter(s => s.estado === 'aprobada').length} icon="check" success onClick={() => toast.success('Surtido', 'Aprobadas listas para entregar')} />
+          <FlowNode num="03" title="Almacén" sub="Surtir" status="active" count={solicitudes.filter(s => s.estado === 'aprobada').length} icon="check" success alert alertCount={alertas.filter(a => a.tipo === 'stock').length} onClick={() => toast.warn('Surtido', `${alertas.filter(a => a.tipo === 'stock').length} productos sin stock para surtir`)} />
         </div>
       </div>
 
-      {/* Solicitudes + Detalle + Alertas */}
+      {/* Alertas tempranas */}
+      <div className="card">
+        <div className="card-header">
+          <div>
+            <div className="card-eyebrow">Monitoreo presupuestal</div>
+            <h3 className="card-title">Alertas tempranas · presupuesto y stock</h3>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span className="tag muted mono">Actualizado hace 4 min</span>
+            <button className="btn btn-ghost" onClick={() => {
+              setAlertas(prev => prev.map(a => a.tipo === 'stock' ? a : ({ ...a, uso: Math.max(40, Math.min(120, a.uso + Math.floor(Math.random() * 10) - 4)) })))
+              toast.info('Monitoreo', 'Métricas actualizadas desde SAE')
+            }}>
+              <Icon name="refresh" size={14} /> Actualizar
+            </button>
+          </div>
+        </div>
+        <div className="card-body" style={{ padding: 0 }}>
+          {alertas.map((a, i) => {
+            if (a.tipo === 'stock') {
+              const pct = a.requerido > 0 ? Math.round((a.disponible / a.requerido) * 100) : 0
+              return (
+                <div key={i} className={`alerta-row severity-${a.severity}`}>
+                  <div className="alerta-bar">
+                    <div className="alerta-bar-fill" style={{ width: Math.min(pct, 100) + '%' }}></div>
+                  </div>
+                  <div className="alerta-info">
+                    <div className="alerta-cliente">
+                      {a.cliente} · <span style={{ fontWeight: 400, color: 'var(--ink-600)' }}>{a.producto}</span>
+                    </div>
+                    <div className="alerta-meta mono">
+                      Disponible {a.disponible} {a.unidad} de {a.requerido} {a.unidad} requeridos
+                    </div>
+                  </div>
+                  <div className="alerta-pct mono" style={{ fontSize: a.disponible === 0 ? 13 : undefined }}>
+                    {a.disponible === 0 ? 'Sin stock' : `${pct}%`}
+                  </div>
+                  <div className={`alerta-tag tag ${a.severity === 'critico' ? 'bad' : 'warn'}`}>
+                    {a.severity === 'critico' ? 'Sin stock' : 'Stock bajo'}
+                  </div>
+                  <button
+                    className="btn btn-ghost"
+                    style={{ marginLeft: 8, height: 28, padding: '0 10px', fontSize: 12 }}
+                    onClick={() => toast.success('Reposición solicitada', `Pedido a almacén central · ${a.producto}`)}
+                  >
+                    <Icon name="package" size={12} /> Reabastecer
+                  </button>
+                </div>
+              )
+            }
+            return (
+              <div key={i} className={`alerta-row severity-${a.severity}`}>
+                <div className="alerta-bar">
+                  <div className="alerta-bar-fill" style={{ width: Math.min(a.uso, 100) + '%' }}></div>
+                </div>
+                <div className="alerta-info">
+                  <div className="alerta-cliente">{a.cliente}</div>
+                  <div className="alerta-meta mono">
+                    ${(a.presupuesto * a.uso / 100).toLocaleString()} de ${a.presupuesto.toLocaleString()} MXN
+                  </div>
+                </div>
+                <div className="alerta-pct mono">{a.uso}%</div>
+                <div className={`alerta-tag tag ${a.severity === 'critico' ? 'bad' : a.severity === 'alto' ? 'warn' : 'info'}`}>
+                  {a.severity}
+                </div>
+                <button
+                  className="btn btn-ghost"
+                  style={{ marginLeft: 8, height: 28, padding: '0 10px', fontSize: 12 }}
+                  onClick={() => toast.success('Contacto enviado', `Se notificó a ${a.cliente} vía WhatsApp + Email`)}
+                >
+                  <Icon name="bell" size={12} /> Notificar
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Solicitudes + Detalle */}
       <div className="suministro-grid">
         <div className="card">
           <div className="card-header">
@@ -252,7 +330,7 @@ export default function Suministro() {
                   <th>Cliente</th>
                   <th>Items</th>
                   <th>Monto MXN</th>
-                  <th>Presup.</th>
+                  <th title="Porcentaje sobre presupuesto autorizado">% s/ presup. autorizado</th>
                   <th>SAE</th>
                   <th>Estado</th>
                 </tr>
@@ -370,51 +448,6 @@ export default function Suministro() {
               </div>
             )}
           </div>
-        </div>
-      </div>
-
-      {/* Alertas tempranas */}
-      <div className="card">
-        <div className="card-header">
-          <div>
-            <div className="card-eyebrow">Monitoreo presupuestal</div>
-            <h3 className="card-title">Alertas tempranas · uso de materiales del mes</h3>
-          </div>
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <span className="tag muted mono">Actualizado hace 4 min</span>
-            <button className="btn btn-ghost" onClick={() => {
-              setAlertas(prev => prev.map(a => ({ ...a, uso: Math.max(40, Math.min(120, a.uso + Math.floor(Math.random() * 10) - 4)) })))
-              toast.info('Monitoreo', 'Métricas actualizadas desde SAE')
-            }}>
-              <Icon name="refresh" size={14} /> Actualizar
-            </button>
-          </div>
-        </div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {alertas.map((a, i) => (
-            <div key={i} className={`alerta-row severity-${a.severity}`}>
-              <div className="alerta-bar">
-                <div className="alerta-bar-fill" style={{ width: Math.min(a.uso, 100) + '%' }}></div>
-              </div>
-              <div className="alerta-info">
-                <div className="alerta-cliente">{a.cliente}</div>
-                <div className="alerta-meta mono">
-                  ${(a.presupuesto * a.uso / 100).toLocaleString()} de ${a.presupuesto.toLocaleString()} MXN
-                </div>
-              </div>
-              <div className="alerta-pct mono">{a.uso}%</div>
-              <div className={`alerta-tag tag ${a.severity === 'critico' ? 'bad' : a.severity === 'alto' ? 'warn' : 'info'}`}>
-                {a.severity}
-              </div>
-              <button
-                className="btn btn-ghost"
-                style={{ marginLeft: 8, height: 28, padding: '0 10px', fontSize: 12 }}
-                onClick={() => toast.success('Contacto enviado', `Se notificó a ${a.cliente} vía WhatsApp + Email`)}
-              >
-                <Icon name="bell" size={12} /> Notificar
-              </button>
-            </div>
-          ))}
         </div>
       </div>
 
@@ -550,7 +583,7 @@ function RejectDialog({ open, onClose, onConfirm, solicitud }) {
   )
 }
 
-function FlowNode({ num, title, sub, status, count, icon, alert, success, external, onClick }) {
+function FlowNode({ num, title, sub, status, count, icon, alert, alertCount, success, external, onClick }) {
   return (
     <div
       className={`flow-node status-${status} ${alert ? 'has-alert' : ''} ${success ? 'is-success' : ''} ${external ? 'is-external' : ''}`}
@@ -562,7 +595,17 @@ function FlowNode({ num, title, sub, status, count, icon, alert, success, extern
       <div className="flow-node-title">{title}</div>
       <div className="flow-node-sub">{sub}</div>
       <div className="flow-node-count mono">{count}</div>
-      {alert && <div className="flow-alert-badge">!</div>}
+      {alert && (
+        <>
+          <div className="flow-alert-badge">{alertCount ?? '!'}</div>
+          {alertCount > 0 && (
+            <div className="flow-alert-pill">
+              <Icon name="bell" size={10} />
+              {alertCount} {alertCount === 1 ? 'alerta' : 'alertas'}
+            </div>
+          )}
+        </>
+      )}
     </div>
   )
 }

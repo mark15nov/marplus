@@ -113,15 +113,21 @@
   letter-spacing: 0.04em;
 }
 
+.flow-node.has-alert {
+  border-color: var(--bad);
+  box-shadow: 0 0 0 4px var(--bad-soft), var(--shadow-sm);
+}
+
 .flow-alert-badge {
   position: absolute;
-  top: -6px;
-  right: -6px;
-  width: 18px;
-  height: 18px;
+  top: -7px;
+  right: -7px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
   background: var(--bad);
   color: white;
-  border-radius: 50%;
+  border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
   display: flex;
@@ -129,6 +135,21 @@
   justify-content: center;
   box-shadow: 0 0 0 3px var(--paper);
   animation: pulse-soft 1.6s infinite;
+}
+
+.flow-alert-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 8px;
+  background: var(--bad-soft);
+  color: var(--bad);
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 999px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .flow-connector {
