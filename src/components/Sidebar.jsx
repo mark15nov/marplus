@@ -2,8 +2,8 @@ import { Icon } from './Icons'
 import { useToast } from './ui.jsx'
 
 const NAV = [
-  { id: 'suministro',  num: '01', label: 'Suministro',          icon: 'package'   },
-  { id: 'dashboard',   num: '02', label: 'Dashboard General',   icon: 'dashboard' },
+  { id: 'dashboard',   num: '01', label: 'Dashboard General',   icon: 'dashboard' },
+  { id: 'suministro',  num: '02', label: 'Suministro',          icon: 'package'   },
   { id: 'incidencias', num: '03', label: 'Incidencias',         icon: 'alert'     },
   { id: 'personal',    num: '04', label: 'Personal',            icon: 'users'     },
 ]
